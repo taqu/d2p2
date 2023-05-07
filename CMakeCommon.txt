@@ -1,0 +1,105 @@
+
+function(add_ispcs ISPC_OBJECTS FILES)
+    set(OBJECT_FILES "")
+    foreach(SOURCE_FILE IN LISTS FILES)
+        string(REPLACE ".ispc" ".ispc.o" OBJECT_FILE ${SOURCE_FILE})
+        get_filename_component(OBJECT_FILE ${OBJECT_FILE} NAME)
+        set(OBJECT_FILE ${CMAKE_CURRENT_BINARY_DIR}/${OBJECT_FILE})
+        set(OBJECT_FILES "${OBJECT_FILES};${OBJECT_FILE}")
+        string(REPLACE ".ispc" ".ispc.h" HEADER_FILE ${SOURCE_FILE})
+        message("header:${HEADER_FILE}")
+        add_custom_command(OUTPUT ${OBJECT_FILE}
+            COMMAND ${ISPC_BIN} ${SOURCE_FILE} -o ${OBJECT_FILE} --target=${ISPC_TARGET} --arch=${ISPC_ARCH} --device=${ISPC_DEVICE} -h ${HEADER_FILE}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    endforeach()
+    set(${ISPC_OBJECTS} ${OBJECT_FILES} PARENT_SCOPE)
+endfunction(add_ispcs)
+
+function(add_ispcs_header_directory ISPC_OBJECTS FILES HEADER_DIRECTORY)
+    set(OBJECT_FILES "")
+    foreach(SOURCE_FILE IN LISTS FILES)
+        string(REPLACE ".ispc" ".ispc.o" OBJECT_FILE ${SOURCE_FILE})
+        get_filename_component(OBJECT_FILE ${OBJECT_FILE} NAME)
+        set(OBJECT_FILE ${CMAKE_CURRENT_BINARY_DIR}/${OBJECT_FILE})
+        set(OBJECT_FILES "${OBJECT_FILES};${OBJECT_FILE}")
+        get_filename_component(FILENAME ${SOURCE_FILE} NAME)
+        string(REPLACE ".ispc" ".ispc.h" HEADER_FILE ${FILENAME})
+        set(HEADER_FILE ${HEADER_DIRECTORY}${HEADER_FILE})
+        message("header:${HEADER_FILE}")
+        add_custom_command(OUTPUT ${OBJECT_FILE}
+            COMMAND ${ISPC_BIN} ${SOURCE_FILE} -o ${OBJECT_FILE} --target=${ISPC_TARGET} --arch=${ISPC_ARCH} --device=${ISPC_DEVICE} -h ${HEADER_FILE}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    endforeach()
+    set(${ISPC_OBJECTS} ${OBJECT_FILES} PARENT_SCOPE)
+endfunction(add_ispcs_header_directory)
+
+function(expand_files FILES SOURCE)
+    file (GLOB SOURCES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${SOURCE})
+    set(${FILES} ${SOURCES} PARENT_SCOPE)
+endfunction(expand_files)
+
+function(expand_absolute_files FILES SOURCE)
+    file (GLOB SOURCES ${SOURCE})
+    set(${FILES} ${SOURCES} PARENT_SCOPE)
+endfunction(expand_absolute_files)
+
+function (IsGnuCompiler)
+    if((${CMAKE_C_COMPILER_ID} STREQUAL "GNU") OR (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU") OR (${CMAKE_C_COMPILER_ID} STREQUAL "Clang") OR (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang"))
+        set(COMPILER_IS_GNU ON PARENT_SCOPE)
+    else()
+        set(COMPILER_IS_GNU OFF PARENT_SCOPE)
+    endif()
+endfunction()
+
+function(get_vs_version VS_VERSION)
+    if(MSVC_VERSION EQUAL 1900)
+        set(${VS_VERSION} 14.0 PARENT_SCOPE)
+    elseif(MSVC_VERSION EQUAL 1910)
+        set(${VS_VERSION} 15.0 PARENT_SCORE)
+    endif()
+endfunction(get_vs_version)
+
+function(get_vs_property_group VSPROPERTIES NAMES VALUES)
+    set(TMP "")
+    set(I 0)
+    foreach(N IN LISTS NAMES)
+        list(GET VALUES ${I} V)
+        set(TMP "${TMP}<${N}>${V}</${N}>\n")
+        math(EXPR I "${I}+1")
+    endforeach()
+    set(${VSPROPERTIES}
+    "<PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='Debug|x64'\">
+        ${TMP}
+    </PropertyGroup>
+    <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='Release|x64'\">
+        ${TMP}
+    </PropertyGroup>"
+    PARENT_SCOPE)
+endfunction(get_vs_property_group)
+
+function(get_vs_working_directory VSPROPERTIES path)
+    set(${VSPROPERTIES}
+    "<PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='Debug|x64'\">
+        <LocalDebuggerWorkingDirectory>${path}</LocalDebuggerWorkingDirectory>
+        <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    </PropertyGroup>
+    <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='Release|x64'\">
+        <LocalDebuggerWorkingDirectory>${path}</LocalDebuggerWorkingDirectory>
+        <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    </PropertyGroup>"
+    PARENT_SCOPE)
+endfunction(get_vs_working_directory)
+
+function(write_vs_user projectname VSPROPERTIES)
+    if(MSVC_VERSION EQUAL 1900)
+        set(VS_VERSION 14.0)
+    elseif(MSVC_VERSION EQUAL 1910)
+        set(VS_VERSION 15.0)
+    endif()
+
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${projectname}.vcxproj.user"
+    "<?xml version=\"1.0\" encoding=\"utf-8\"?>
+    <Project ToolsVersion=\"${VS_VERSION}\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">
+        ${VSPROPERTIES}
+    </Project>")
+endfunction(write_vs_user)
