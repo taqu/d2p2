@@ -54,12 +54,55 @@ For more information, please refer to <http://unlicense.org>
 */
 // clang-format on
 #include "d2p2.h"
-#include <functional>
 #include <filesystem>
+#include <functional>
 
 namespace d2p2
 {
-    class Tensor;
+class Tensor;
+
+//---------------------------------------------
+class Weights
+{
+public:
+    inline static constexpr uint32_t StaticSize = 64;
+    inline static constexpr uint32_t Max = 4;
+    explicit Weights(uint32_t s0);
+    Weights(uint32_t s0, uint32_t s1);
+    Weights(uint32_t s0, uint32_t s1, uint32_t s2);
+    Weights(uint32_t s0, uint32_t s1, uint32_t s2, uint32_t s3);
+    ~Weights();
+
+    const float& operator()(uint32_t i0) const;
+    float& operator()(uint32_t i0);
+
+    const float& operator()(uint32_t i0, uint32_t i1) const;
+    float& operator()(uint32_t i0, uint32_t i1);
+
+    const float& operator()(uint32_t i0, uint32_t i1, uint32_t i2) const;
+    float& operator()(uint32_t i0, uint32_t i1, uint32_t i2);
+
+    const float& operator()(uint32_t i0, uint32_t i1, uint32_t i2, uint32_t i3) const;
+    float& operator()(uint32_t i0, uint32_t i1, uint32_t i2, uint32_t i3);
+
+private:
+    Weights(const Weights&) = delete;
+    Weights& operator=(const Weights&) = delete;
+    uint32_t sum_sizes() const;
+
+    void allocate();
+    const float* get() const;
+    float* get();
+    uint32_t dimensions_;
+    uint32_t capacity_;
+    uint32_t size_[Max];
+    union
+    {
+        float array_[StaticSize];
+        float* pointer_;
+    } items_;
+};
+
 class Image
 {
 public:
@@ -76,6 +119,7 @@ public:
     operator uint8_t*();
 
     Image& operator=(Image&& other) noexcept;
+
 private:
     uint32_t width_;
     uint32_t height_;
@@ -95,4 +139,3 @@ bool load_image(Tensor& image, const std::filesystem::path& path);
 bool load_image_gray(Tensor& image, const std::filesystem::path& path);
 } // namespace d2p2
 #endif // INC_D2P2_UTIL_H_
-

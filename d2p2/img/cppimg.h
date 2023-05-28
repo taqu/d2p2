@@ -2837,7 +2837,7 @@ void convertRGBToGray(s32 width, s32 height, u8* dst, const u8* src)
         for(s32 j = 0; j < width; ++j) {
             const u8* s = src + (i*width+j)*3;
             u8* d = dst + (i*width+j);
-            d[0] = Color::toGray(src[0], src[1], src[2]);
+            d[0] = Color::toGray(s[0], s[1], s[2]);
         }
     }
 }
@@ -2853,7 +2853,7 @@ void convertRGBAToGray(s32 width, s32 height, u8* dst, const u8* src)
         for(s32 j = 0; j < width; ++j) {
             const u8* s = src + (i*width+j)*4;
             u8* d = dst + (i*width+j);
-            d[0] = Color::toGray(src[0], src[1], src[2]);
+            d[0] = Color::toGray(s[0], s[1], s[2]);
         }
     }
 }

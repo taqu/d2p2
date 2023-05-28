@@ -52,10 +52,10 @@ For more information, please refer to <http://unlicense.org>
 */
 // clang-format on
 #include "d2p2/util.h"
-#include <cstdio>
-#include <random>
 #include "d2p2/tensor.h"
 #include "ispc/matrix.ispc.h"
+#include <cstdio>
+#include <random>
 
 #ifdef _WIN32
 #    include <Windows.h>
@@ -68,6 +68,158 @@ For more information, please refer to <http://unlicense.org>
 
 namespace d2p2
 {
+//---------------------------------------------
+Weights::Weights(uint32_t s0)
+    : dimensions_(1)
+    ,capacity_(0)
+    , size_{}
+{
+    assert(0<s0);
+    size_[0] = s0;
+    capacity_ = sum_sizes();
+    allocate();
+}
+
+Weights::Weights(uint32_t s0, uint32_t s1)
+    : dimensions_(2)
+    ,capacity_(0)
+    , size_{}
+{
+    assert(0<s0);
+    size_[0] = s0;
+    size_[1] = s1;
+    capacity_ = sum_sizes();
+    allocate();
+}
+
+Weights::Weights(uint32_t s0, uint32_t s1, uint32_t s2)
+    : dimensions_(3)
+    ,capacity_(0)
+    , size_{}
+{
+    assert(0<s0);
+    size_[0] = s0;
+    size_[1] = s1;
+    size_[2] = s2;
+    capacity_ = sum_sizes();
+    allocate();
+}
+
+Weights::Weights(uint32_t s0, uint32_t s1, uint32_t s2, uint32_t s3)
+    : dimensions_(4)
+    ,capacity_(0)
+    , size_{}
+{
+    assert(0<s0);
+    size_[0] = s0;
+    size_[1] = s1;
+    size_[2] = s2;
+    size_[3] = s3;
+    capacity_ = sum_sizes();
+    allocate();
+}
+
+Weights::~Weights()
+{
+    if(StaticSize<capacity_){
+        d2p2_free(items_.pointer_);
+    }
+    dimensions_ = 0;
+}
+
+const float& Weights::operator()(uint32_t i0) const
+{
+    assert(1 == dimensions_);
+    const float* items = get();
+    uint32_t index = i0;
+    return items[index];
+}
+
+float& Weights::operator()(uint32_t i0)
+{
+    assert(1 == dimensions_);
+    float* items = get();
+    uint32_t index = i0;
+    return items[index];
+}
+
+const float& Weights::operator()(uint32_t i0, uint32_t i1) const
+{
+    assert(2 == dimensions_);
+    const float* items = get();
+    uint32_t index = (i0*size_[1])+i1;
+    return items[index];
+}
+
+float& Weights::operator()(uint32_t i0, uint32_t i1)
+{
+    assert(2 == dimensions_);
+    float* items = get();
+    uint32_t index = (i0*size_[1])+i1;
+    return items[index];
+}
+
+const float& Weights::operator()(uint32_t i0, uint32_t i1, uint32_t i2) const
+{
+    assert(3 == dimensions_);
+    const float* items = get();
+    uint32_t index = ((i0*size_[1])+i1)*size_[2] + i2;
+    return items[index];
+}
+
+float& Weights::operator()(uint32_t i0, uint32_t i1, uint32_t i2)
+{
+    assert(3 == dimensions_);
+    float* items = get();
+    uint32_t index = ((i0*size_[1])+i1)*size_[2] + i2;
+    return items[index];
+}
+
+const float& Weights::operator()(uint32_t i0, uint32_t i1, uint32_t i2, uint32_t i3) const
+{
+    assert(3 == dimensions_);
+    const float* items = get();
+    uint32_t index = (((i0*size_[1])+i1)*size_[2] + i2)*size_[3] + i3;
+    return items[index];
+}
+
+float& Weights::operator()(uint32_t i0, uint32_t i1, uint32_t i2, uint32_t i3)
+{
+    assert(3 == dimensions_);
+    float* items = get();
+    uint32_t index = (((i0*size_[1])+i1)*size_[2] + i2)*size_[3] + i3;
+    return items[index];
+}
+
+uint32_t Weights::sum_sizes() const
+{
+    uint32_t total = size_[0];
+    for(uint32_t i=1; i<dimensions_; ++i){
+        total *= size_[i];
+    }
+    return total;
+}
+
+void Weights::allocate()
+{
+    if(capacity_ <= StaticSize) {
+        ::memset(items_.array_, 0, sizeof(float) * StaticSize);
+        return;
+    }
+    items_.pointer_ = static_cast<float*>(d2p2_malloc(sizeof(float) * capacity_));
+    ::memset(items_.pointer_, 0, sizeof(float) * capacity_);
+}
+
+const float* Weights::get() const
+{
+    return (capacity_ <= StaticSize) ? items_.array_ : items_.pointer_;
+}
+
+float* Weights::get()
+{
+    return (capacity_ <= StaticSize) ? items_.array_ : items_.pointer_;
+}
+
 namespace
 {
     class IOStream: public cppimg::Stream
@@ -84,78 +236,78 @@ namespace
 
         virtual cppimg::s32 read(size_t size, void* dst);
         virtual cppimg::s32 write(size_t size, const void* dst);
+
     private:
         FILE* file_;
     };
 
     IOStream::IOStream()
-        :file_(nullptr)
+        : file_(nullptr)
     {
     }
 
-        IOStream::~IOStream()
+    IOStream::~IOStream()
     {
-            close();
+        close();
     }
 
-        bool IOStream::open(const char8_t* path)
+    bool IOStream::open(const char8_t* path)
     {
-            close();
-            #ifdef _WIN32
-            if(0 != fopen_s(&file_, reinterpret_cast<const char*>(path), "rb")){
-                return false;
-            }
-            #else
-            file_ = fopen(reinterpret_cast<const char*>(path), "rb");
-            if(nullptr == file_){
-                return false;
+        close();
+#ifdef _WIN32
+        if(0 != fopen_s(&file_, reinterpret_cast<const char*>(path), "rb")) {
+            return false;
         }
-            #endif
-            return true;
+#else
+        file_ = fopen(reinterpret_cast<const char*>(path), "rb");
+        if(nullptr == file_) {
+            return false;
+        }
+#endif
+        return true;
     }
 
-        void IOStream::close()
+    void IOStream::close()
     {
-            if(nullptr == file_){
-                return;
-            }
-            fclose(file_);
-            file_ = nullptr;
+        if(nullptr == file_) {
+            return;
+        }
+        fclose(file_);
+        file_ = nullptr;
     }
 
-
-        bool IOStream::valid() const
+    bool IOStream::valid() const
     {
-            return nullptr != file_;
+        return nullptr != file_;
     }
 
-        bool IOStream::seek(cppimg::off_t pos, cppimg::s32 whence)
+    bool IOStream::seek(cppimg::off_t pos, cppimg::s32 whence)
     {
-            return 0 == fseek(file_, pos, whence);
+        return 0 == fseek(file_, pos, whence);
     }
 
-        cppimg::off_t IOStream::tell()
+    cppimg::off_t IOStream::tell()
     {
-            return ftell(file_);
+        return ftell(file_);
     }
 
-        cppimg::s64 IOStream::size()
+    cppimg::s64 IOStream::size()
     {
-            struct _stat64 s;
-            if(0 != _fstat64(fileno(file_), &s)){
-                return 0;
-            }
-            return s.st_size;
+        struct _stat64 s;
+        if(0 != _fstat64(fileno(file_), &s)) {
+            return 0;
+        }
+        return s.st_size;
     }
 
-        cppimg::s32 IOStream::read(size_t size, void* dst)
+    cppimg::s32 IOStream::read(size_t size, void* dst)
     {
-            return fread(dst, size, 1, file_);
+        return fread(dst, size, 1, file_);
     }
 
-        cppimg::s32 IOStream::write(size_t size, const void* dst)
+    cppimg::s32 IOStream::write(size_t size, const void* dst)
     {
-            return fwrite(dst, size, 1, file_);
+        return fwrite(dst, size, 1, file_);
     }
 
 } // namespace
@@ -279,16 +431,16 @@ namespace
     void to_matrix(Tensor& matrix, uint32_t width, uint32_t height, const uint8_t* data)
     {
         matrix = std::move(Tensor(static_cast<int32_t>(height), static_cast<int32_t>(width), 1));
-        ispc::array_to_float(width*height, (float*)matrix, data, 1.0f/255.0f);
+        ispc::array_to_float(width * height, (float*)matrix, data, 1.0f / 255.0f);
     }
-}
+} // namespace
 
 bool load_image(Tensor& image, const std::filesystem::path& path)
 {
     IOStream file;
     {
         const char8_t* u8path = path.u8string().c_str();
-        if(!file.open(u8path)){
+        if(!file.open(u8path)) {
             return false;
         }
     }
@@ -298,51 +450,49 @@ bool load_image(Tensor& image, const std::filesystem::path& path)
     cppimg::ColorType colorType = cppimg::ColorType::RGB;
     uint8_t* bytes = nullptr;
     if(".png" == ext) {
-        if(!cppimg::PNG::read(width, height, colorType, nullptr, file)){
+        if(!cppimg::PNG::read(width, height, colorType, nullptr, file)) {
             return false;
         }
-        bytes = static_cast<uint8_t*>(d2p2_malloc(sizeof(uint8_t)*width*height*cppimg::getBytesPerPixel(colorType)));
-        if(!cppimg::PNG::read(width, height, colorType, bytes, file)){
+        bytes = static_cast<uint8_t*>(d2p2_malloc(sizeof(uint8_t) * width * height * cppimg::getBytesPerPixel(colorType)));
+        if(!cppimg::PNG::read(width, height, colorType, bytes, file)) {
             d2p2_free(bytes);
             return false;
         }
-    }else if(".jpg" == ext){
-        if(!cppimg::JPEG::read(width, height, colorType, nullptr, file)){
+    } else if(".jpg" == ext) {
+        if(!cppimg::JPEG::read(width, height, colorType, nullptr, file)) {
             return false;
         }
-        bytes = static_cast<uint8_t*>(d2p2_malloc(sizeof(uint8_t)*width*height*cppimg::getBytesPerPixel(colorType)));
-        if(!cppimg::JPEG::read(width, height, colorType, bytes, file)){
+        bytes = static_cast<uint8_t*>(d2p2_malloc(sizeof(uint8_t) * width * height * cppimg::getBytesPerPixel(colorType)));
+        if(!cppimg::JPEG::read(width, height, colorType, bytes, file)) {
             d2p2_free(bytes);
             return false;
         }
-    }else{
+    } else {
         return false;
     }
 
-    switch(colorType){
-    case cppimg::ColorType::GRAY:{
+    switch(colorType) {
+    case cppimg::ColorType::GRAY: {
         uint8_t* dst = static_cast<uint8_t*>(d2p2::d2p2_malloc(sizeof(uint8_t) * width * height * 3));
         cppimg::convertGrayToRGB(width, height, dst, bytes);
         d2p2_free(bytes);
         bytes = dst;
-    }
-        break;
-    case cppimg::ColorType::RGBA:{
+    } break;
+    case cppimg::ColorType::RGBA: {
         uint8_t* dst = static_cast<uint8_t*>(d2p2::d2p2_malloc(sizeof(uint8_t) * width * height * 3));
         cppimg::convertRGBAToRGB(width, height, dst, bytes);
         d2p2_free(bytes);
         bytes = dst;
-    }
-        break;
+    } break;
     default:
         break;
     }
-    float* m = static_cast<float*>(d2p2_malloc(sizeof(float)*width*height*3));
-    for(int32_t i=0; i<(width*height*3); ++i){
+    float* m = static_cast<float*>(d2p2_malloc(sizeof(float) * width * height * 3));
+    for(int32_t i = 0; i < (width * height * 3); ++i) {
         m[i] = cppimg::Color::toFloat(bytes[i]);
     }
     d2p2_free(bytes);
-    image = std::move(Tensor(width, height, 3, m));
+    image = std::move(Tensor(static_cast<uint32_t>(width), static_cast<uint32_t>(height), 3UL, m));
     return true;
 }
 
@@ -351,7 +501,7 @@ bool load_image_gray(Tensor& image, const std::filesystem::path& path)
     IOStream file;
     {
         const char8_t* u8path = path.u8string().c_str();
-        if(!file.open(u8path)){
+        if(!file.open(u8path)) {
             return false;
         }
     }
@@ -361,47 +511,45 @@ bool load_image_gray(Tensor& image, const std::filesystem::path& path)
     cppimg::ColorType colorType = cppimg::ColorType::RGB;
     uint8_t* bytes = nullptr;
     if(".png" == ext) {
-        if(!cppimg::PNG::read(width, height, colorType, nullptr, file)){
+        if(!cppimg::PNG::read(width, height, colorType, nullptr, file)) {
             return false;
         }
-        bytes = static_cast<uint8_t*>(d2p2_malloc(sizeof(uint8_t)*width*height*cppimg::getBytesPerPixel(colorType)));
-        if(!cppimg::PNG::read(width, height, colorType, bytes, file)){
+        bytes = static_cast<uint8_t*>(d2p2_malloc(sizeof(uint8_t) * width * height * cppimg::getBytesPerPixel(colorType)));
+        if(!cppimg::PNG::read(width, height, colorType, bytes, file)) {
             d2p2_free(bytes);
             return false;
         }
-    }else if(".jpg" == ext){
-        if(!cppimg::JPEG::read(width, height, colorType, nullptr, file)){
+    } else if(".jpg" == ext) {
+        if(!cppimg::JPEG::read(width, height, colorType, nullptr, file)) {
             return false;
         }
-        bytes = static_cast<uint8_t*>(d2p2_malloc(sizeof(uint8_t)*width*height*cppimg::getBytesPerPixel(colorType)));
-        if(!cppimg::JPEG::read(width, height, colorType, bytes, file)){
+        bytes = static_cast<uint8_t*>(d2p2_malloc(sizeof(uint8_t) * width * height * cppimg::getBytesPerPixel(colorType)));
+        if(!cppimg::JPEG::read(width, height, colorType, bytes, file)) {
             d2p2_free(bytes);
             return false;
         }
-    }else{
+    } else {
         return false;
     }
 
-    switch(colorType){
+    switch(colorType) {
     case cppimg::ColorType::RGB: {
         uint8_t* dst = static_cast<uint8_t*>(d2p2::d2p2_malloc(sizeof(uint8_t) * width * height));
         cppimg::convertRGBToGray(width, height, dst, bytes);
         d2p2_free(bytes);
         bytes = dst;
-    }
-        break;
-    case cppimg::ColorType::RGBA:{
+    } break;
+    case cppimg::ColorType::RGBA: {
         uint8_t* dst = static_cast<uint8_t*>(d2p2::d2p2_malloc(sizeof(uint8_t) * width * height));
         cppimg::convertRGBAToGray(width, height, dst, bytes);
         d2p2_free(bytes);
         bytes = dst;
-    }
-        break;
+    } break;
     default:
         break;
     }
-    float* m = static_cast<float*>(d2p2_malloc(sizeof(float)*width*height*3));
-    for(int32_t i=0; i<(width*height*3); ++i){
+    float* m = static_cast<float*>(d2p2_malloc(sizeof(float) * width * height * 3));
+    for(int32_t i = 0; i < (width * height * 3); ++i) {
         m[i] = cppimg::Color::toFloat(bytes[i]);
     }
     d2p2_free(bytes);

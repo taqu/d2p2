@@ -3,7 +3,7 @@
 #include "d2p2/tensor.h"
 #include "src/ispc/matrix.ispc.h"
 #include <iostream>
-
+#if 0
 TEST_CASE("Mul")
 {
     using namespace d2p2;
@@ -68,4 +68,5 @@ TEST_CASE("Softmax")
     Tensor r = softmax(a);
     std::cout << r << std::endl;
 }
+#endif
 

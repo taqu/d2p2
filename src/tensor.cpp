@@ -53,147 +53,370 @@ For more information, please refer to <http://unlicense.org>
 // clang-format on
 #include "d2p2/tensor.h"
 #include "src/ispc/matrix.ispc.h"
-#include <algorithm>
 #include <cstring>
+#include <cstdarg>
+#include <algorithm>
 
 namespace d2p2
 {
+//--------------------------------------------------------
+Dimensions::Dimensions(uint32_t x0)
+    :size_(1)
+    ,dimensions_{}
+{
+    dimensions_[0] = x0;
+}
+
+Dimensions::Dimensions(uint32_t x0, uint32_t x1)
+    :size_(2)
+    ,dimensions_{}
+{
+    dimensions_[0] = x0;
+    dimensions_[1] = x1;
+}
+
+Dimensions::Dimensions(uint32_t x0, uint32_t x1, uint32_t x2)
+:size_(3)
+    ,dimensions_{}
+{
+    dimensions_[0] = x0;
+    dimensions_[1] = x1;
+    dimensions_[2] = x2;
+}
+
+Dimensions::Dimensions(uint32_t x0, uint32_t x1, uint32_t x2, uint32_t x3)
+:size_(4)
+    ,dimensions_{}
+{
+    dimensions_[0] = x0;
+    dimensions_[1] = x1;
+    dimensions_[2] = x2;
+    dimensions_[3] = x3;
+}
+
+Dimensions::Dimensions(const Dimensions& other)
+    :size_(other.size_)
+{
+    for(uint32_t i=0; i<Max; ++i){
+        dimensions_[i] = other.dimensions_[i];
+    }
+}
+
+Dimensions& Dimensions::operator=(const Dimensions& other)
+{
+    if(this == &other){
+        return *this;
+    }
+    size_ = other.size_;
+    for(uint32_t i=0; i<Max; ++i){
+        dimensions_[i] = other.dimensions_[i];
+    }
+    return *this;
+}
+
+//--------------------------------------------------------
 Tensor::Tensor()
-    : rows_(0)
-    , cols_(0)
-    , channels_(0)
+    : dimensions_(0)
+    , size_{}
     , m_(nullptr)
 {
 }
 
-Tensor::Tensor(uint32_t rows, uint32_t cols, uint32_t channels)
-    : rows_(rows)
-    , cols_(cols)
-    , channels_(channels)
+Tensor::Tensor(uint32_t s0)
+    : dimensions_(1)
+    , size_{}
     , m_(nullptr)
 {
-    assert(0 < rows_);
-    assert(0 < cols_);
-    assert(0 < channels_);
-    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * rows_ * cols_ * channels_));
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * s0));
+    size_[0] = s0;
 }
 
-Tensor::Tensor(uint32_t rows, uint32_t cols, uint32_t channels, std::initializer_list<float> args)
-    : rows_(rows)
-    , cols_(cols)
-    , channels_(channels)
+Tensor::Tensor(uint32_t s0, uint32_t s1)
+    : dimensions_(2)
+    , size_{}
     , m_(nullptr)
 {
-    assert(0 < rows_);
-    assert(0 < cols_);
-    assert(0 < channels_);
-    assert((rows_ * cols_ * channels_) == args.size());
-    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * rows_ * cols_ * channels_));
-    for(uint32_t e = 0; e < channels_; ++e) {
-        for(uint32_t r = 0; r < rows_; ++r) {
-            for(uint32_t c = 0; c < cols_; ++c) {
-                uint32_t i = (e * rows_ + r) * cols_ + c;
-                m_[i] = args.begin()[i];
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * (s0*s1)));
+    size_[0] = s0;
+    size_[1] = s1;
+}
+
+Tensor::Tensor(uint32_t s0, uint32_t s1, uint32_t s2)
+    : dimensions_(3)
+    , size_{}
+    , m_(nullptr)
+{
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * (s0*s1*s2)));
+    size_[0] = s0;
+    size_[1] = s1;
+    size_[2] = s2;
+}
+
+Tensor::Tensor(uint32_t s0, uint32_t s1, uint32_t s2, uint32_t s3)
+    : dimensions_(4)
+    , size_{}
+    , m_(nullptr)
+{
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * (s0*s1*s2*s3)));
+    size_[0] = s0;
+    size_[1] = s1;
+    size_[2] = s2;
+    size_[3] = s3;
+}
+
+Tensor::Tensor(uint32_t s0, std::initializer_list<float> args)
+    : dimensions_(1)
+    , size_{}
+    , m_(nullptr)
+{
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * s0));
+    size_[0] = s0;
+    assert(size_[0] == args.size());
+    uint32_t count = 0;
+    for(const float x : args){
+        m_[count] = x;
+        ++count;
+    }
+}
+
+Tensor::Tensor(uint32_t s0, uint32_t s1, std::initializer_list<float> args)
+    : dimensions_(2)
+    , size_{}
+    , m_(nullptr)
+{
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * (s0*s1)));
+    size_[0] = s0;
+    size_[1] = s1;
+    const float* src = args.begin();
+    for(uint32_t i = 0; i < size_[0]; ++i) {
+        uint32_t r0 = i*size_[1];
+        for(uint32_t j = 0; j < size_[1]; ++j) {
+            uint32_t index = r0 + j;
+            m_[index] = src[index];
+        }
+    }
+}
+
+Tensor::Tensor(uint32_t s0, uint32_t s1, uint32_t s2, std::initializer_list<float> args)
+    : dimensions_(3)
+    , size_{}
+    , m_(nullptr)
+{
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * (s0*s1*s2)));
+    size_[0] = s0;
+    size_[1] = s1;
+    size_[2] = s2;
+    const float* src = args.begin();
+    for(uint32_t i = 0; i < size_[0]; ++i) {
+        uint32_t r0 = i*size_[1]*size_[2];
+        for(uint32_t j = 0; j < size_[1]; ++j) {
+            uint32_t r1 = j*size_[2];
+            for(uint32_t k = 0; k < size_[2]; ++k) {
+                uint32_t index = r0 + r1 + k;
+                m_[index] = src[index];
             }
         }
     }
 }
 
-Tensor::Tensor(uint32_t rows, uint32_t cols, uint32_t channels, float* m)
-    : rows_(rows)
-    , cols_(cols)
-    , channels_(channels)
-    , m_(m)
+Tensor::Tensor(uint32_t s0, uint32_t s1, uint32_t s2, uint32_t s3, std::initializer_list<float> args)
+    : dimensions_(4)
+    , size_{}
+    , m_(nullptr)
 {
-    assert(0 < rows_);
-    assert(0 < cols_);
-    assert(0 < channels_);
-    assert(nullptr != m);
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * (s0*s1*s2*s3)));
+    size_[0] = s0;
+    size_[1] = s1;
+    size_[2] = s2;
+    size_[3] = s3;
+    const float* src = args.begin();
+    for(uint32_t i = 0; i < size_[0]; ++i) {
+        uint32_t r0 = i * size_[1] * size_[2] * size_[3];
+        for(uint32_t j = 0; j < size_[1]; ++j) {
+            uint32_t r1 = j * size_[2] * size_[3];
+            for(uint32_t k = 0; k < size_[2]; ++k) {
+                uint32_t r2 = k * size_[3];
+                for(uint32_t l = 0; l < size_[3]; ++l) {
+                    uint32_t index = r0 + r1 + r2 + l;
+                    m_[index] = src[index];
+                }
+            }
+        }
+    }
+}
+
+Tensor::Tensor(uint32_t s0, const float* m)
+    : dimensions_(1)
+    , size_{}
+    , m_(nullptr)
+{
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * s0));
+    size_[0] = s0;
+    ::memcpy(m_, m, sizeof(float)*s0);
+}
+
+Tensor::Tensor(uint32_t s0, uint32_t s1, const float* m)
+    : dimensions_(2)
+    , size_{}
+    , m_(nullptr)
+{
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * (s0*s1)));
+    size_[0] = s0;
+    size_[1] = s1;
+    ::memcpy(m_, m, sizeof(float)*s0*s1);
+}
+
+Tensor::Tensor(uint32_t s0, uint32_t s1, uint32_t s2, const float* m)
+    : dimensions_(3)
+    , size_{}
+    , m_(nullptr)
+{
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * (s0*s1*s2)));
+    size_[0] = s0;
+    size_[1] = s1;
+    size_[2] = s2;
+    ::memcpy(m_, m, sizeof(float)*s0*s1*s2);
+}
+
+Tensor::Tensor(uint32_t s0, uint32_t s1, uint32_t s2, uint32_t s3, const float* m)
+    : dimensions_(4)
+    , size_{}
+    , m_(nullptr)
+{
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * (s0*s1*s2*s3)));
+    size_[0] = s0;
+    size_[1] = s1;
+    size_[2] = s2;
+    size_[3] = s3;
+    ::memcpy(m_, m, sizeof(float)*s0*s1*s2*s3);
 }
 
 Tensor::Tensor(const Tensor& other)
-    : rows_(other.rows_)
-    , cols_(other.cols_)
-    , channels_(other.channels_)
+    : dimensions_(other.dimensions_)
+    , size_{}
     , m_(nullptr)
 {
-    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * rows_ * cols_ * channels_));
-    ::memcpy(m_, other.m_, sizeof(float) * rows_ * cols_ * channels_);
+    ::memcpy(size_, other.size_, sizeof(uint32_t)*Max);
+    uint32_t total = sum_dims();
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * total));
+    ::memcpy(m_, other.m_, sizeof(float) * total);
 }
 
 Tensor::Tensor(Tensor&& other) noexcept
-    : rows_(other.rows_)
-    , cols_(other.cols_)
-    , channels_(other.channels_)
+    : dimensions_(other.dimensions_)
+    , size_{}
     , m_(other.m_)
 {
-    other.rows_ = 0;
-    other.cols_ = 0;
-    other.channels_ = 0;
+    ::memcpy(size_, other.size_, sizeof(uint32_t)*Max);
+    other.dimensions_ = 0;
+    ::memset(other.size_, 0, sizeof(uint32_t)*Max);
     other.m_ = nullptr;
 }
 
 Tensor::~Tensor()
 {
     d2p2_free(m_);
-    rows_ = 0;
-    cols_ = 0;
-    channels_ = 0;
+    dimensions_ = 0;
+    ::memset(size_, 0, sizeof(uint32_t)*Max);
     m_ = nullptr;
 }
 
-uint32_t Tensor::rows() const
+uint32_t Tensor::size(uint32_t dim) const
 {
-    return rows_;
-}
-
-uint32_t Tensor::cols() const
-{
-    return cols_;
-}
-
-uint32_t Tensor::channels() const
-{
-    return channels_;
+    assert(dim<Max);
+    return size_[dim];
 }
 
 void Tensor::identity()
 {
-    ::memset(m_, 0, sizeof(float) * rows_ * cols_ * channels_);
-    uint32_t x = std::min(rows_, cols_);
-    for(uint32_t i=0; i<channels_; ++i){
-        for(uint32_t j=0; j<x; ++j){
-            m_[(i*rows_ + j)*cols_ + j] = 1.0f;
+    uint32_t total = sum_dims();
+    ::memset(m_, 0, sizeof(float) * total);
+    uint32_t x = size_[0];
+    for(uint32_t i=1; i<dimensions_; ++i){
+        x = std::min(x, size_[i]);
+    }
+    for(uint32_t i=0; i<x; ++i){
+        uint32_t index = i;
+        for(uint32_t j=1; j<dimensions_; ++j){
+            index *= size_[j];
+            index += i;
         }
+        m_[index] = 1.0f;
     }
 }
 
-const float& Tensor::operator()(uint32_t r, uint32_t c, uint32_t e) const
+const float& Tensor::operator()(uint32_t i0) const
 {
-    assert(0 <= r && r < rows_);
-    assert(0 <= c && c < cols_);
-    assert(0 <= e && e < channels_);
-    return m_[(e*rows_ + r)*cols_ + c];
+    assert(1 == dimensions_);
+    assert(i0 < size_[0]);
+    return m_[i0];
 }
 
-float& Tensor::operator()(uint32_t r, uint32_t c, uint32_t e)
+float& Tensor::operator()(uint32_t i0)
 {
-    assert(0 <= r && r < rows_);
-    assert(0 <= c && c < cols_);
-    assert(0 <= e && e < channels_);
-    return m_[(e*rows_ + r)*cols_ + c];
+    assert(1 == dimensions_);
+    assert(i0 < size_[0]);
+    return m_[i0];
 }
 
-const float& Tensor::operator()(uint32_t i) const
+const float& Tensor::operator()(uint32_t i0, uint32_t i1) const
 {
-    assert(0 <= i && i < (rows_ * cols_ * channels_));
-    return m_[i];
+    assert(2 == dimensions_);
+    assert(i0 < size_[0]);
+    assert(i1 < size_[1]);
+    uint32_t index = i0*size_[1] + i1;
+    return m_[index];
 }
 
-float& Tensor::operator()(uint32_t i)
+float& Tensor::operator()(uint32_t i0, uint32_t i1)
 {
-    assert(0 <= i && i < (rows_ * cols_ * channels_));
-    return m_[i];
+    assert(2 == dimensions_);
+    assert(i0 < size_[0]);
+    assert(i1 < size_[1]);
+    uint32_t index = i0*size_[1] + i1;
+    return m_[index];
+}
+
+const float& Tensor::operator()(uint32_t i0, uint32_t i1, uint32_t i2) const
+{
+    assert(3 == dimensions_);
+    assert(i0 < size_[0]);
+    assert(i1 < size_[1]);
+    assert(i2 < size_[2]);
+    uint32_t index = (i0*size_[1] + i1)*size_[2] + i2;
+    return m_[index];
+}
+
+float& Tensor::operator()(uint32_t i0, uint32_t i1, uint32_t i2)
+{
+    assert(3 == dimensions_);
+    assert(i0 < size_[0]);
+    assert(i1 < size_[1]);
+    assert(i2 < size_[2]);
+    uint32_t index = (i0*size_[1] + i1)*size_[2] + i2;
+    return m_[index];
+}
+
+const float& Tensor::operator()(uint32_t i0, uint32_t i1, uint32_t i2, uint32_t i3) const
+{
+    assert(4 == dimensions_);
+    assert(i0 < size_[0]);
+    assert(i1 < size_[1]);
+    assert(i2 < size_[2]);
+    assert(i3 < size_[3]);
+    uint32_t index = ((i0*size_[1] + i1)*size_[2] + i2)*size_[3] + i3;
+    return m_[index];
+}
+
+float& Tensor::operator()(uint32_t i0, uint32_t i1, uint32_t i2, uint32_t i3)
+{
+    assert(4 == dimensions_);
+    assert(i0 < size_[0]);
+    assert(i1 < size_[1]);
+    assert(i2 < size_[2]);
+    assert(i3 < size_[3]);
+    uint32_t index = ((i0*size_[1] + i1)*size_[2] + i2)*size_[3] + i3;
+    return m_[index];
 }
 
 Tensor& Tensor::operator=(const Tensor& other)
@@ -202,11 +425,11 @@ Tensor& Tensor::operator=(const Tensor& other)
         return *this;
     }
     d2p2_free(m_);
-    rows_ = other.rows_;
-    cols_ = other.cols_;
-    channels_ = other.channels_;
-    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * rows_ * cols_ * channels_));
-    ::memcpy(m_, other.m_, sizeof(float) * rows_ * cols_ * channels_);
+    dimensions_ = other.dimensions_;
+    ::memcpy(size_, other.size_, sizeof(uint32_t)*Max);
+    uint32_t total = sum_dims();
+    m_ = static_cast<float*>(d2p2_malloc(sizeof(float) * total));
+    ::memcpy(m_, other.m_, sizeof(float) * total);
     return *this;
 }
 
@@ -216,15 +439,27 @@ Tensor& Tensor::operator=(Tensor&& other) noexcept
         return *this;
     }
     d2p2_free(m_);
-    rows_ = other.rows_;
-    cols_ = other.cols_;
-    channels_ = other.channels_;
+    dimensions_ = other.dimensions_;
+    ::memcpy(size_, other.size_, sizeof(uint32_t)*Max);
     m_ = other.m_;
-    other.rows_ = 0;
-    other.cols_ = 0;
-    other.channels_ = 0;
+    other.dimensions_ = 0;
+    ::memset(other.size_, 0, sizeof(uint32_t)*Max);
     other.m_ = nullptr;
     return *this;
+}
+
+void Tensor::setZeros()
+{
+    uint32_t total = sum_dims();
+    ::memset(m_, 0, sizeof(float)*total);
+}
+
+void Tensor::setOnes()
+{
+    uint32_t total = sum_dims();
+    for(uint32_t i=0; i<total; ++i){
+        m_[i] = 1.0f;
+    }
 }
 
 Tensor::operator const float*() const
@@ -232,48 +467,21 @@ Tensor::operator const float*() const
     return m_;
 }
 
-Tensor::operator float*()
+    Tensor::operator float*()
 {
-    return m_;
-}
+        return m_;
+        }
 
-const float& Tensor::get1d(uint32_t index, uint32_t e) const
+uint32_t Tensor::sum_dims() const
 {
-    assert(index<rows_*cols_);
-    assert(e<channels_);
-    return m_[e*(rows_*cols_) + index];
-}
-
-float& Tensor::get1d(uint32_t index, uint32_t e)
-{
-    assert(index<rows_*cols_);
-    assert(e<channels_);
-    return m_[e*(rows_*cols_) + index];
-}
-
-const float& Tensor::get2d(uint32_t r, uint32_t c, uint32_t e) const
-{
-    return m_[channels_*(r*cols_ + c) + e];
-}
-
-float& Tensor::get2d(uint32_t r, uint32_t c, uint32_t e)
-{
-    return m_[channels_*(r*cols_ + c) + e];
-}
-
-void Tensor::setZeros()
-{
-    ::memset(m_, 0, rows_*cols_*channels_*sizeof(float));
-}
-
-void Tensor::setOnes()
-{
-    uint32_t size = rows_*cols_*channels_;
-    for(uint32_t i=0; i<size; ++i){
-        m_[i] = 1.0f;
+    uint32_t total = 1;
+    for(uint32_t i=0; i<dimensions_; ++i){
+        total *= size_[i];
     }
+    return total;
 }
 
+#if 0
 Tensor operator+(const Tensor& m0, const Tensor& m1)
 {
     assert(m0.rows() == m1.rows());
@@ -363,40 +571,91 @@ Tensor softmax(const Tensor& m)
     ispc::softmax(m.rows() * m.cols() * m.channels(), r, m);
     return r;
 }
+#endif
+
+namespace
+{
+    void print1(std::ostream& os, const Tensor& m)
+    {
+        os << '[';
+        for(uint32_t i0 = 0; i0 < m.size(0); ++i0) {
+            os << m(i0) << ' ';
+        }
+        os << ']';
+    }
+
+    void print2(std::ostream& os, const Tensor& m)
+    {
+        os << '[';
+        for(uint32_t i0 = 0; i0 < m.size(0); ++i0) {
+            os << '[';
+            for(uint32_t i1 = 0; i1 < m.size(1); ++i1) {
+                os << m(i0, i1) << ' ';
+            }
+            os << ']';
+        }
+        os << ']';
+    }
+
+    void print3(std::ostream& os, const Tensor& m)
+    {
+        os << '[';
+        for(uint32_t i0 = 0; i0 < m.size(0); ++i0) {
+            os << '[';
+            for(uint32_t i1 = 0; i1 < m.size(1); ++i1) {
+                os << '[';
+                for(uint32_t i2 = 0; i2 < m.size(2); ++i2) {
+                    os << m(i0,i1,i2) << ' ';
+                }
+                os << ']';
+            }
+            os << ']';
+        }
+        os << ']';
+    }
+
+    void print4(std::ostream& os, const Tensor& m)
+    {
+        os << '[';
+        for(uint32_t i0 = 0; i0 < m.size(0); ++i0) {
+            os << '[';
+            for(uint32_t i1 = 0; i1 < m.size(1); ++i1) {
+                os << '[';
+                for(uint32_t i2 = 0; i2 < m.size(2); ++i2) {
+                    os << '[';
+                    for(uint32_t i3 = 0; i3 < m.size(3); ++i3) {
+                    os << m(i0,i1,i2,i3) << ' ';
+                    }
+                    os << ']';
+                }
+                os << ']';
+            }
+            os << ']';
+        }
+        os << ']';
+    }
+} // namespace
 
 std::ostream& operator<<(std::ostream& os, const Tensor& m)
 {
-    os << '[';
-    for(uint32_t r = 0; r < m.rows(); ++r) {
-        os << '[';
-        for(uint32_t c = 0; c < m.cols(); ++c) {
-            os << '[';
-            for(uint32_t e = 0; e < m.channels(); ++e) {
-                os << m(r, c, e) << ' ';
-            }
-            os << ']';
-        }
-        os << ']';
+    switch(m.dims()){
+    case 1:
+        print1(os, m);
+        break;
+    case 2:
+        print2(os, m);
+        break;
+    case 3:
+        print3(os, m);
+        break;
+    case 4:
+        print4(os, m);
+        break;
+    default:
+        assert(false);
+        break;
     }
-    os << ']';
-    return os;
-}
-
-std::ostream& print_numpy(std::ostream& os, const Tensor& m)
-{
-    os << '[';
-    for(uint32_t e = 0; e < m.channels(); ++e) {
-        os << '[';
-        for(uint32_t r = 0; r < m.rows(); ++r) {
-            os << '[';
-            for(uint32_t c = 0; c < m.cols(); ++c) {
-                os << m(r, c, e) << ' ';
-            }
-            os << ']';
-        }
-        os << ']';
-    }
-    os << ']';
     return os;
 }
 } // namespace d2p2
+
