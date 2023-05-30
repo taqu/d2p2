@@ -230,6 +230,38 @@ private:
     Tensor bias_;
 };
 
+//---------------------------------------------
+/**
+ * @brief
+ */
+class ConvTranspose2d: public IFunction
+{
+public:
+    ConvTranspose2d();
+    ConvTranspose2d(ConvTranspose2d&& other) noexcept;
+    ConvTranspose2d(uint32_t input_channels, uint32_t output_channels, uint32_t kernel_size, uint32_t stride = 1, uint32_t padding = 0, Conv::PaddingMode padding_mode = Conv::PaddingMode::Zeros);
+    virtual ~ConvTranspose2d() noexcept;
+
+    Tensor operator()(const Tensor& tensor) const;
+    const Tensor& weights() const;
+    void weights(std::initializer_list<float> args);
+    const Tensor& bias() const;
+    void bias(std::initializer_list<float> args);
+
+private:
+    ConvTranspose2d(const ConvTranspose2d&) = delete;
+    ConvTranspose2d& operator=(const ConvTranspose2d&) = delete;
+
+    uint32_t input_channels_;
+    uint32_t output_channels_;
+    uint32_t kernel_size_;
+    uint32_t stride_;
+    uint32_t padding_;
+    Conv::PaddingMode padding_mode_;
+    Tensor weights_;
+    Tensor bias_;
+};
+
 template<class T>
 void mul(uint32_t rows, uint32_t cols, uint32_t dcols, T* dst, const T* m0, const T* m1)
 {

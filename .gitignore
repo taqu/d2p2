@@ -32,8 +32,12 @@
 *.out
 *.app
 
+*.vcxproj*
+
 # Directories
 /bin
 /build
 /data
-
+/thirdparty
+*.vs
+*/x64

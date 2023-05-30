@@ -499,7 +499,8 @@ Tensor ConvTranspose1d::operator()(const Tensor& tensor) const
     for(uint32_t batch = 0; batch < tensor.size(0); ++batch) {
         for(uint32_t oi = 0; oi < output_channels_; ++oi) {
             for(uint32_t ii = 0; ii < input_channels_; ++ii) {
-                for(uint32_t c = 0; c < tensor.size(2); ++c) {
+                uint32_t o = 0;
+                for(uint32_t c = 0; c < tensor.size(2); ++c, o+=stride_) {
                     for(uint32_t k = 0; k < kernel_size_; ++k) {
                         float v = tensor(batch, ii, c);
                         float w = weights_(ii, oi, k);
@@ -507,7 +508,7 @@ Tensor ConvTranspose1d::operator()(const Tensor& tensor) const
                     }
                     for(int32_t f = left; f <= right; ++f) {
                         float v = weighted(static_cast<uint32_t>(f - left));
-                        uint32_t p = wrap_mode(c + transpose_offset, f, out_size);
+                        uint32_t p = wrap_mode(o+transpose_offset, f, out_size);
                         if(Conv::Invalid != p) {
                             result(batch, oi, p) += v + bias_(oi);
                         }
@@ -675,6 +676,148 @@ const Tensor& Conv2d::bias() const
 }
 
 void Conv2d::bias(std::initializer_list<float> args)
+{
+    assert(args.size() == output_channels_);
+    uint32_t i=0;
+    for(auto&& itr = args.begin(); itr!= args.end(); ++itr,++i){
+        bias_(i) = *itr;
+    }
+}
+
+//--- ConvTranspose2d
+//-------------------------------------------------------------------
+ConvTranspose2d::ConvTranspose2d()
+    : input_channels_(0)
+    , output_channels_(0)
+    , kernel_size_(0)
+    , stride_(1)
+    , padding_(0)
+    , padding_mode_(Conv::PaddingMode::Zeros)
+{
+}
+
+ConvTranspose2d::ConvTranspose2d(ConvTranspose2d&& other) noexcept
+    : input_channels_(other.input_channels_)
+    , output_channels_(other.output_channels_)
+    , kernel_size_(other.kernel_size_)
+    , stride_(other.stride_)
+    , padding_(other.padding_)
+    , padding_mode_(other.padding_mode_)
+    , weights_(std::move(other.weights_))
+    , bias_(std::move(other.bias_))
+{
+    other.input_channels_ = 0;
+    other.output_channels_ = 0;
+    other.kernel_size_ = 0;
+    other.stride_ = 0;
+    other.padding_ = 0;
+    other.padding_mode_ = Conv::PaddingMode::Zeros;
+}
+
+ConvTranspose2d::ConvTranspose2d(uint32_t input_channels, uint32_t output_channels, uint32_t kernel_size, uint32_t stride, uint32_t padding, Conv::PaddingMode padding_mode)
+    : input_channels_(input_channels)
+    , output_channels_(output_channels)
+    , kernel_size_(kernel_size)
+    , stride_(stride)
+    , padding_(padding)
+    , padding_mode_(padding_mode)
+    , weights_(input_channels, output_channels, kernel_size, kernel_size)
+    , bias_(output_channels)
+{
+}
+
+ConvTranspose2d::~ConvTranspose2d() noexcept
+{
+    input_channels_ = 0;
+    output_channels_ = 0;
+    kernel_size_ = 0;
+    stride_ = 0;
+    padding_mode_ = Conv::PaddingMode::Zeros;
+}
+
+Tensor ConvTranspose2d::operator()(const Tensor& tensor) const
+{
+    std::function<uint32_t(uint32_t, int32_t, uint32_t)> wrap_mode;
+    switch(padding_mode_) {
+    case Conv::PaddingMode::Reflect:
+        wrap_mode = Conv::sample_reflect;
+        break;
+    case Conv::PaddingMode::Replicate:
+        wrap_mode = Conv::sample_replicate;
+        break;
+    case Conv::PaddingMode::Repeat:
+        wrap_mode = Conv::sample_repeat;
+        break;
+    default:
+        wrap_mode = Conv::sample_zeros;
+        break;
+    }
+
+    Weights weighted(kernel_size_, kernel_size_);
+    //weight = out_channels x input_channels x kernel_size x kernel_size
+    uint32_t orows = transpose_src2dst_size(tensor.size(2), kernel_size_, stride_, padding_);
+    uint32_t ocols = transpose_src2dst_size(tensor.size(3), kernel_size_, stride_, padding_);
+    Tensor result(tensor.size(0), output_channels_, orows, ocols);
+    result.setZeros();
+    auto [rleft, rright] = Conv::kernel_range(kernel_size_);
+    auto [cleft, cright] = Conv::kernel_range(kernel_size_);
+    uint32_t transpose_offset = Conv::transpose_offset(kernel_size_);
+    for(uint32_t batch = 0; batch < tensor.size(0); ++batch) {
+        for(uint32_t oi = 0; oi < output_channels_; ++oi) {
+            for(uint32_t ii = 0; ii < input_channels_; ++ii) {
+                uint32_t out_r = 0;
+                for(uint32_t r = 0; r<tensor.size(2); ++r,out_r+=stride_) {
+                    uint32_t out_c = 0;
+                    for(uint32_t c = 0; c <tensor.size(3); ++c,out_c+=stride_) {
+                        for(uint32_t kr = 0; kr < kernel_size_; ++kr) {
+                            for(uint32_t kc = 0; kc < kernel_size_; ++kc) {
+                                float v = tensor(batch, ii, r, c);
+                                float w = weights_(ii, oi, kr, kc);
+                                weighted(kr, kc) = v * w;
+                            }
+                        }
+
+                        uint32_t out_c = src2dst_index(c, kernel_size_, stride_, padding_);
+                        float x = 0.0f;
+                        for(int32_t rf = rleft; rf <= rright; ++rf) {
+                            for(int32_t cf = cleft; cf <= cright; ++cf) {
+                                float w = weighted(static_cast<uint32_t>(rf - rleft), static_cast<uint32_t>(cf - cleft));
+                                uint32_t rp = wrap_mode(out_r+transpose_offset, rf, orows);
+                                uint32_t cp = wrap_mode(out_c+transpose_offset, cf, ocols);
+                                if(Conv::Invalid != rp && Conv::Invalid != cp){
+                                    result(batch, oi, rp, cp) += w;
+                                }
+                            } // for(int32_t cf
+                        }     // for(int32_t rf
+                    } // for(uint32_t c
+                }     // for(uint32_t r
+            }         // for(uint32_t ii
+        }             // for(uint32_t oi
+    }                 // for(uint32_t batch
+    return result;
+}
+
+const Tensor& ConvTranspose2d::weights() const
+{
+    return weights_;
+}
+
+void ConvTranspose2d::weights(std::initializer_list<float> args)
+{
+    assert(args.size() == (input_channels_ * output_channels_ * kernel_size_ * kernel_size_));
+    uint32_t i=0;
+    float* weights = &weights_(0,0,0,0);
+    for(auto&& itr = args.begin(); itr!= args.end(); ++itr,++i){
+        weights[i] = *itr;
+    }
+}
+
+const Tensor& ConvTranspose2d::bias() const
+{
+    return bias_;
+}
+
+void ConvTranspose2d::bias(std::initializer_list<float> args)
 {
     assert(args.size() == output_channels_);
     uint32_t i=0;

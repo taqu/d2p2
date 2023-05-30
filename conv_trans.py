@@ -61,12 +61,12 @@ print('input:' + str(x.shape))
 print('input:' + str(x))
 
 print('weight shape:' + str(conv.weight.shape))
-print(str(conv.weight.data))
+#print(str(conv.weight.data))
 conv.weight.data = torch.from_numpy(np.array([
     [[1, 2, 3],[4, 5, 6],[7,8,9]],
     [[1, 2, 3],[4, 5, 6],[7,8,10]]
     ], dtype=np.float32))
-#print(str(conv.weight.data))
+print(str(conv.weight.data))
 
 y = conv(x)
 print('result:' + str(y.shape))
