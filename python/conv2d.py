@@ -22,7 +22,7 @@ print('result shape:' + str(y.shape))
 
 print('--------------------------------------------------------')
 x = torch.from_numpy(np.array([[[[1,2],[3,4]]]], dtype=np.float32))
-conv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=2, stride=1, padding=0, bias=False)
+conv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=2, stride=2, padding=0, bias=False)
 
 print('input:' + str(x.shape))
 print('input:' + str(x))

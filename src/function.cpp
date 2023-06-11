@@ -56,7 +56,6 @@ For more information, please refer to <http://unlicense.org>
 #include <utility>
 #include "ispc/matrix.ispc.h"
 #include "d2p2/util.h"
-
 namespace d2p2
 {
 namespace
@@ -232,7 +231,7 @@ Linear::Linear(Linear&& other) noexcept
 Linear::Linear(uint32_t input_features, uint32_t output_features)
     : input_features_(input_features)
     , output_features_(output_features)
-    , weights_(input_features, output_features)
+    , weights_(output_features, input_features)
     , bias_(output_features)
 {
 }
@@ -245,20 +244,21 @@ Linear::~Linear() noexcept
 
 Tensor Linear::operator()(const Tensor& tensor) const
 {
-    // weights: out_channels x in_channels x kernel_size
-    Tensor result(tensor.size(0), output_features_, tensor.size(2));
+    assert(0<tensor.size(0));
+    assert(0<tensor.size(1));
+    assert(input_features_ == tensor.size(2));
+    // weights: input_features x output_features 
+    Tensor result(tensor.size(0), tensor.size(1), output_features_);
     result.setZeros();
 
-    for(uint32_t c = 0; c < tensor.size(2); ++c) {
-        for(uint32_t sr = 0; sr < tensor.size(0); ++sr) {
-            for(uint32_t dc = 0; dc < output_features_; ++dc) {
-                float t=0.0f;
-                for(uint32_t sc = 0; sc < tensor.size(1); ++sc) {
-                    float v = tensor(sr, sc, c);
-                    float w = weights_(sc, dc);
-                    t += v*w;
+    for(uint32_t b = 0; b < tensor.size(0); ++b) {
+        for(uint32_t c = 0; c < tensor.size(1); ++c) {
+            for(uint32_t o = 0; o < output_features_; ++o) {
+                float t = 0.0f;
+                for(uint32_t i = 0; i < input_features_; ++i) {
+                    t += tensor(b,c,i) * weights_(o, i);
                 }
-                result(sr, dc, c) = t;
+                result(b,c,o) = t + bias_(o);
             }
         }
     }
@@ -777,7 +777,6 @@ Tensor ConvTranspose2d::operator()(const Tensor& tensor) const
                             }
                         }
 
-                        uint32_t out_c = src2dst_index(c, kernel_size_, stride_, padding_);
                         float x = 0.0f;
                         for(int32_t rf = rleft; rf <= rright; ++rf) {
                             for(int32_t cf = cleft; cf <= cright; ++cf) {

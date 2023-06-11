@@ -262,19 +262,5 @@ private:
     Tensor bias_;
 };
 
-template<class T>
-void mul(uint32_t rows, uint32_t cols, uint32_t dcols, T* dst, const T* m0, const T* m1)
-{
-    for(uint32_t sr = 0; sr < rows; ++sr) {
-        for(uint32_t dc = 0; dc < dcols; ++dc) {
-            T t = 0;
-            for(uint32_t sc = 0; sc < cols; ++sc) {
-                t += m0[sr * cols + sc] * m1[sc * dcols + dc];
-            }
-            dst[sr * cols + dc] = t;
-        }
-    }
-}
-
 } // namespace d2p2
 #endif // INC_D2P2_FUNCTION_H_
